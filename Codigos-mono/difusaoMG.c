@@ -2,29 +2,29 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
-#define QUANT_AMOSTRAS 10
-#define L 21
+#define QUANT_AMOSTRAS 100
+#define POPULACOES 853
 #define N 1000000
 #define QUANT_DADOS 10000
-#define TEMPO_MAXIMO 1000
+#define TEMPO_MAXIMO 100
 
-int u, distFocoIni[L*L];
-double dados[2*(L*L)+1][QUANT_DADOS], media[QUANT_DADOS];
+int maiorPopulacao;
+int u;
+double dados[2*POPULACOES+1][QUANT_DADOS], media[QUANT_DADOS];
 double lambda, mu;
-double k[L*L];
+double k[POPULACOES];
 double tempo=0.0;
-double taxaInfeccao[L*L], taxaCura[L*L];
+double taxaInfeccao[POPULACOES], taxaCura[POPULACOES];
 double phi[TEMPO_MAXIMO]; //inserir quantidade de dias
 double taxaInfeccaoTotal, taxaCuraTotal, sumTaxas;
-double picoEpidemia[2][L*L];
-int Ni[L*L][L*L], Ns[L*L][L*L], Nr[L*L];
-int NiTotal[L*L], NsTotal[L*L], NiTotalSoma, NsTotalSoma;
+double picoEpidemia[2][POPULACOES];
+int Ni[POPULACOES][POPULACOES], Ns[POPULACOES][POPULACOES], Nr[POPULACOES], populacaoCidade[POPULACOES][2];
+double d[POPULACOES][POPULACOES];
+int NiTotal[POPULACOES], NsTotal[POPULACOES], NiTotalSoma, NsTotalSoma;
 double f;
-double d0;
-double a=5.0;
-double soma[2][L*L], larguraCurva[L*L];
-int matriz[L][L];
 
+double soma[2][POPULACOES], larguraCurva[POPULACOES];
+int lista[2][POPULACOES];
 
 int im=1073741824;
 int a1 = 65539;
@@ -46,40 +46,34 @@ double rand01_kiss(){
 }
 
 void inicializacao(){
-  int i, j, l, focoIni;
-  focoIni=L/2;
+  int i, j;
   i=0;
   tempo=0.0;
   lambda=0.06;
   mu=0.25;
-  l=0;
-  for (i=0; i<L; i++){
-    for(j=0; j<L; j++){
-      matriz[i][j]=l;
-      distFocoIni[l]=abs(i-focoIni)+abs(j-focoIni);
-      l++;
-
-    }
-  }
+  f=0.0; //fator que reduz o número de contatos diários
 
 
-  memset(Ni, 0, L*L*L*L*sizeof(Ni[0][0]));
-  memset(Ns, 0, L*L*L*L*sizeof(Ns[0][0]));
-  memset(Nr, 0, L*L*sizeof(Nr[0]));
-  memset(NiTotal, 0, L*L*sizeof(NiTotal[0]));
-  memset(NsTotal, 0, L*L*sizeof(NsTotal[0]));
-  memset(soma, 0, 2*L*L*sizeof(soma[0][0]));
-  memset(larguraCurva, 0, L*L*sizeof(larguraCurva[0]));
+  memset(lista, 0, 2*POPULACOES*sizeof(lista[0][0]));
+  memset(lista, -1, 2*POPULACOES*sizeof(lista[0][0]));
+
+  memset(Ni, 0, POPULACOES*POPULACOES*sizeof(Ni[0][0]));
+  memset(Ns, 0, POPULACOES*POPULACOES*sizeof(Ns[0][0]));
+  memset(Nr, 0, POPULACOES*sizeof(Nr[0]));
+  memset(NiTotal, 0, POPULACOES*sizeof(NiTotal[0]));
+  memset(NsTotal, 0, POPULACOES*sizeof(NsTotal[0]));
+  memset(soma, 0, 2*POPULACOES*sizeof(soma[0][0]));
+  memset(larguraCurva, 0, POPULACOES*sizeof(larguraCurva[0]));
   NiTotalSoma=0;
   NsTotalSoma=0;
-  for (i=0; i<L*L; i++){
-      if (i==focoIni){
-        Ni[i][i]=N*0.0001;
+  for (i=0; i<POPULACOES; i++){
+      if (i==maiorPopulacao){
+        Ni[i][i]=populacaoCidade[i][1]*0.0001;
       }
       NiTotal[i]+=Ni[i][i];
       NiTotalSoma+=Ni[i][i];
       NsTotalSoma+=Ni[i][i];
-      Ns[i][i]=N-Ni[i][i];
+      Ns[i][i]=populacaoCidade[i][1]-Ni[i][i];
       NsTotal[i]+=Ns[i][i];
       NsTotalSoma+=Ns[i][i];
       k[i]=13;
@@ -87,17 +81,19 @@ void inicializacao(){
 
       k[i]=(1-f)*k[i];
   }
+
   NiTotalSoma=0;
   NsTotalSoma=0;
+
   taxaCuraTotal=0;
   taxaInfeccaoTotal=0;
 
 
 
-  for (i=0; i<L*L; i++){
+  for (i=0; i<POPULACOES; i++){
     NiTotal[i]=0;
     NsTotal[i]=0;
-    for (j=0; j<L*L; j++){
+    for (j=0; j<POPULACOES; j++){
       NiTotal[i]+=Ni[i][j];
       NsTotal[i]+=Ns[i][j];
     }
@@ -110,7 +106,6 @@ void inicializacao(){
   }
 
   sumTaxas=taxaCuraTotal+taxaInfeccaoTotal;
-//  printf("Soma das taxas Inicio: %lf %lf %lf\n", sumTaxas, taxaCuraTotal, taxaInfeccaoTotal);
 }
 
 void curar(){
@@ -121,20 +116,21 @@ void curar(){
   zr=rand01_kiss()*taxaCuraTotal;
   aux=0;
 
-  for (i=0; i<L*L; i++){
+  for (i=0; i<POPULACOES; i++){
     aux+=taxaCura[i];
     if (zr<aux){
-      aux-=taxaCura[i];
+      zr=rand01_kiss()*taxaCura[i];
+      aux=0;
       aux+= Ni[i][i]*mu;
       if (zr<aux){
         Ni[i][i]--;
         Nr[i]++;
         cidade1=i;
         cidade2=i;
-        i=L*L;
+        i=POPULACOES;
       }
       else{
-        for(j=0; j<L*L;j++){
+        for(j=0; j<POPULACOES;j++){
           if (i!=j){
             aux+=Ni[i][j]*mu;
           }
@@ -143,149 +139,162 @@ void curar(){
             Nr[j]++;
             cidade1=i;
             cidade2=j;
-            i=L*L;
-            j=L*L;
+            i=POPULACOES;
+            j=POPULACOES;
           }
         }
       }
     }
   }
-  //calcular taxas que mudaram
-  taxaCuraTotal-=taxaCura[cidade1];
+  //calcular taxas que mudaram cura ocorre na população j que está em i
+
   NiTotal[cidade1]--;
   NiTotalSoma--;
-  taxaCura[cidade1]=mu*NiTotal[cidade1];
-  taxaCuraTotal+=taxaCura[cidade1];
-  sumTaxas=taxaCuraTotal+taxaInfeccaoTotal;
 
-//  printf("Soma das taxas Cura: %lf %lf %lf\n", sumTaxas, taxaCuraTotal, taxaInfeccaoTotal);
+
+  taxaInfeccaoTotal-=taxaInfeccao[cidade1];
+  taxaCuraTotal-=taxaCura[cidade1];
+
+
+
+  if (cidade1!=cidade2){
+    taxaInfeccaoTotal-=taxaInfeccao[cidade2];
+    taxaInfeccao[cidade2]=lambda*k[cidade2]*NiTotal[cidade2]*NsTotal[cidade2]/(NiTotal[cidade2]+NsTotal[cidade2]+Nr[cidade2]);
+    taxaInfeccaoTotal+=taxaInfeccao[cidade2];
+  }
+
+
+  taxaInfeccao[cidade1]=lambda*k[cidade1]*NiTotal[cidade1]*NsTotal[cidade1]/(NiTotal[cidade1]+NsTotal[cidade1]+Nr[cidade1]);
+  taxaCura[cidade1]=mu*NiTotal[cidade1];
+
+
+  taxaInfeccaoTotal+=taxaInfeccao[cidade1];
+  taxaCuraTotal+=taxaCura[cidade1];
+
+
+
+  sumTaxas=taxaCuraTotal+taxaInfeccaoTotal;
 }
 
 void infectar(){
-  double zr, aux;
-  int cidade1, cidade2, auxC=0;
+  double zr, aux, aux2;
+  int cidade1, cidade2;
   int i, j;
   zr=rand01_kiss()*taxaInfeccaoTotal;
   aux=0;
 
-  for (i=0; i<L*L; i++){
+  for (i=0; i<POPULACOES; i++){
     aux+=taxaInfeccao[i];
-
+    aux2=aux;
     if (zr<aux){
       zr=(rand01_kiss())*NsTotal[i];
       aux=Ns[i][i];
-    //  if (aux<0)
-      //  printf("%lf %d %d \n", aux, Ns[i][i], i);
-      if (zr<aux && Ns[i][i]>0){
+      if (zr<aux){
+        if (lista[0][i]==-1){
+          aux2-=taxaInfeccao[i];
+          for (j=0; j<POPULACOES; j++){
+            aux2+=lambda*k[i]*Ni[i][j]*NsTotal[i]/(NiTotal[i]+NsTotal[i]+Nr[i]);
+            if(zr<aux2 && i!=j){
+              lista[0][i]=j;
+              lista[1][i]=2; //indice de pegou na cidade
+              j=POPULACOES;
+            }
+          }
+        }
         Ni[i][i]++;
         Ns[i][i]--;
         cidade1=i;
         cidade2=i;
-        i=L*L;
-        auxC=1;
+        i=POPULACOES;
       }
       else{
         zr=rand01_kiss()*(NsTotal[i]-Ns[i][i]);
         aux=0;
-        for(j=0; j<L*L;j++){
+        for(j=0; j<POPULACOES;j++){
           if (i!=j){
             aux+=Ns[i][j];
-          //  if (aux<0)
-        //      printf("%lf %d %d %d\n", aux, Ns[i][j], i, j);
           }
-          if (zr<aux && Ns[i][j]>0){
+          if (zr<aux){
             Ni[i][j]++;
             Ns[i][j]--;
+            if (lista[0][j]==-1){
+              lista[0][j]=i;
+              lista[1][j]=1; //indice de pegou em viagem
+            }
             cidade1=i;
             cidade2=j;
-            i=L*L;
-            j=L*L;
-            auxC=1;
+            i=POPULACOES;
+            j=POPULACOES;
           }
         }
       }
     }
   }
   //cidade1 onde ocorreu a infecção da população da cidade2
-  if (aux<0 || zr<0){
-    printf("%d %lf %lf\n", cidade1, aux, zr);
-//    getchar();
-  }
-  taxaInfeccaoTotal-=taxaInfeccao[cidade1];
   NiTotal[cidade1]++;
   NsTotal[cidade1]--;
   NiTotalSoma++;
   NsTotalSoma--;
+
+  taxaInfeccaoTotal-=taxaInfeccao[cidade1];
+  taxaCuraTotal-=taxaCura[cidade1];
+
   taxaInfeccao[cidade1]=lambda*k[cidade1]*NiTotal[cidade1]*NsTotal[cidade1]/(NiTotal[cidade1]+NsTotal[cidade1]+Nr[cidade1]);
+  taxaCura[cidade1]=mu*NiTotal[cidade1];
+
   taxaInfeccaoTotal+=taxaInfeccao[cidade1];
+  taxaCuraTotal+=taxaCura[cidade1];
+
   sumTaxas=taxaCuraTotal+taxaInfeccaoTotal;
-  if (auxC==0){
-    printf("aqui\n");
-  //  getchar();
-  }
-//  printf("Soma das taxas infectar: %lf %lf %lf\n", sumTaxas, taxaCuraTotal, taxaInfeccaoTotal);
 }
 
-
 void viajar(){
-  int i, j, l, m, aux1, aux2, teste, teste2;
-  double zr, Dijlm;
-
-  for (i=0; i<L; i++){
-    for (j=0; j<L; j++){
-      aux1=Ni[matriz[i][j]][matriz[i][j]];
-      aux2=Ns[matriz[i][j]][matriz[i][j]];
-      for (l=0; l<L; l++){
-        for (m=0; m<L; m++){
-          if(i!=l || j!=m){
-
-            Dijlm=d0/pow((abs(i-l)+abs(j-m)),a);
-
-            Ni[matriz[l][m]][matriz[i][j]]=aux1*Dijlm;
-            Ns[matriz[l][m]][matriz[i][j]]=aux2*Dijlm;
-            Ni[matriz[i][j]][matriz[i][j]]-=Ni[matriz[l][m]][matriz[i][j]];
-            Ns[matriz[i][j]][matriz[i][j]]-=Ns[matriz[l][m]][matriz[i][j]];
-            if (Ni[matriz[i][j]][matriz[i][j]]<0 || Ns[matriz[i][j]][matriz[i][j]]<0){
-              printf("AQUI: %d %d %lf %lf %d %d %d %d\n", matriz[i][j], matriz[l][m], d0, Dijlm, aux1, aux2, Ni[matriz[i][j]][matriz[i][j]], Ns[matriz[i][j]][matriz[i][j]]);
-            //  getchar();
-            }
-          }
-        }
+  int i, j, aux1, aux2;
+  double zr;
+  for (i=0; i<POPULACOES; i++){
+    aux1=Ni[i][i];
+    aux2=Ns[i][i];
+    for(j=0; j<POPULACOES;j++){
+      if (i!=j){
+        Ni[j][i]=aux1*d[i][j];
+        Ns[j][i]=aux2*d[i][j];
+        Ni[i][i]-=Ni[j][i];
+        Ns[i][i]-=Ns[j][i];
       }
-      for (l=0; l<L; l++){
-        for (m=0; m<L; m++){
-          if(i!=l && j!=m){
-            zr=rand01_kiss();
-            Dijlm=d0/pow((abs(i-l)+abs(j-m)),a);
-            if (zr<=(aux1*Dijlm-floor(aux1*Dijlm)) && (Ni[matriz[i][j]][matriz[i][j]]-1)>=0){
-              Ni[matriz[l][m]][matriz[i][j]]++;
-              Ni[matriz[i][j]][matriz[i][j]]--;
-            }
-            zr=rand01_kiss();
-            if (zr<=(aux2*Dijlm-floor(aux2*Dijlm)) && (Ns[matriz[i][j]][matriz[i][j]]-1)>=0){
-              Ns[matriz[l][m]][matriz[i][j]]++;
-              Ns[matriz[i][j]][matriz[i][j]]--;
-            }
-          }
+    }
+    for (j=0; j<POPULACOES; j++){
+      if (i!=j){
+        zr=rand01_kiss();
+        if (zr<=(aux1*d[i][j]-floor(aux1*d[i][j])) && (Ni[i][i]-1)>=0){
+          Ni[j][i]++;
+          Ni[i][i]--;
+        }
+
+        zr=rand01_kiss();
+        if (zr<=(aux2*d[i][j]-floor(aux2*d[i][j])) && (Ns[i][i]-1)>=0){
+          Ns[j][i]++;
+          Ns[i][i]--;
+        }
+        if (Ni[i][i]<0 || Ns[i][i]<0){
+          printf("i j: %d %d: %d %d %d %d\n", i, j, Ni[i][i], NiTotal[i], Ns[i][i], Ns[j][i]);
         }
       }
     }
-  }
 
+  }
   taxaCuraTotal=0;
   taxaInfeccaoTotal=0;
   NiTotalSoma=0;
   NsTotalSoma=0;
-//  printf("aqui\n" );
 
-
-  for (i=0; i<L*L; i++){
+  for (i=0; i<POPULACOES; i++){
     NiTotal[i]=0;
     NsTotal[i]=0;
-    for (j=0; j<L*L; j++){
-        NiTotal[i]+=Ni[i][j];
-        NsTotal[i]+=Ns[i][j];
+    for (j=0; j<POPULACOES; j++){
+      NiTotal[i]+=Ni[i][j];
+      NsTotal[i]+=Ns[i][j];
 
+      //printf("POPULACOES %d %d Nij %d Sij %d\n", i, j, Ni[i][j], Ns[i][j]);
     }
     NiTotalSoma+=NiTotal[i];
     NsTotalSoma+=NsTotal[i];
@@ -296,19 +305,17 @@ void viajar(){
     taxaInfeccaoTotal+=taxaInfeccao[i];
     //printf("%d: V %lf I %lf C %lf \n\n", i, taxaViagem[i], taxaInfeccao[i], taxaCura[i]);
   }
-  //getchar();
   //printf("%lf\n", taxaViagemTotal);
   sumTaxas=taxaCuraTotal+taxaInfeccaoTotal;
 
-//  printf("Soma das taxas Viajar: %lf %lf %lf\n", sumTaxas, taxaCuraTotal, taxaInfeccaoTotal);
 
 }
 
 void retornar(){
   int i, j;
 
-  for (i=0; i<L*L; i++){
-    for(j=0; j<L*L;j++){
+  for (i=0; i<POPULACOES; i++){
+    for(j=0; j<POPULACOES;j++){
       if (i!=j){
         Ni[j][j]+=Ni[i][j];
         Ni[i][j]=0;
@@ -322,15 +329,15 @@ void retornar(){
   taxaCuraTotal=0;
   taxaInfeccaoTotal=0;
 
-  for (i=0; i<L*L; i++){
+  for (i=0; i<POPULACOES; i++){
 
     NiTotal[i]=Ni[i][i];
     NsTotal[i]=Ns[i][i];
 
     NiTotalSoma+=NiTotal[i];
     NsTotalSoma+=NsTotal[i];
-    taxaInfeccao[i]=lambda*k[i]*NiTotal[i]*NsTotal[i]/(NiTotal[i]+NsTotal[i]+Nr[i]);
 
+    taxaInfeccao[i]=lambda*k[i]*NiTotal[i]*NsTotal[i]/(NiTotal[i]+NsTotal[i]+Nr[i]);
     taxaCura[i]=mu*NiTotal[i];
     taxaCuraTotal+=taxaCura[i];
     taxaInfeccaoTotal+=taxaInfeccao[i];
@@ -339,14 +346,12 @@ void retornar(){
   //getchar();
   //printf("%lf\n", taxaViagemTotal);
   sumTaxas=taxaCuraTotal+taxaInfeccaoTotal;
-
-//  printf("Soma das taxas Retornar: %lf %lf %lf\n", sumTaxas, taxaCuraTotal, taxaInfeccaoTotal);
 }
 
 void passo_tempo_sir(){
   double zr;
-
-  double propInfectados, propCura;
+  int aux, aux1, i, j, NiAux, NsAux;
+  double propInfectados, propCura, propViagem;
 
 
   if (sumTaxas>0){
@@ -357,11 +362,9 @@ void passo_tempo_sir(){
 
     zr=rand01_kiss();
     if (zr<propCura){
-      //printf("Cura\n");
       curar();
     }
     else{
-      //printf("infecta\n" );
       infectar();
     }
   }
@@ -375,11 +378,11 @@ void largura_da_curva(){
   int i, t;
   double normalizacaoAux, aux;
   for (t=0; t<TEMPO_MAXIMO; t++){
-    for (i=0; i<L*L; i++){
+    for (i=0; i<POPULACOES; i++){
       soma[0][i]+=(1.0*dados[2*i+1][t]);
     }
   }
-  for (i=0; i<L*L; i++){
+  for (i=0; i<POPULACOES; i++){
     aux=soma[0][i];
     soma[0][i]=0.0;
     for (t=0; t<TEMPO_MAXIMO; t++){
@@ -393,45 +396,69 @@ void largura_da_curva(){
 }
 
 int main() {
-  FILE *arq, *arq2, *arq3, *arq4;
+  FILE *arq, *arq2, *arq3, *arq4, *arq5, *arq6;
   char nome[50]="";
   int n, i, j, tempoViagem;
-  double t, p, auxPicoEpidemia[2][L*L], d_tot;
+  double t, dt, auxPicoEpidemia[2][POPULACOES], auxDViagem;
   int auxViagem=0;
+  double tempoIntervalo;
+  int auxTempoIntervalo, auxPOPULACAO, populacaoTotalCidades=0;
+  auxTempoIntervalo=0;
+  tempoIntervalo=0.1;
+  int mediaRecuperados[POPULACOES];
 
-  p=1;
-  f=0.4;
+  dt=1.0; //passo de tempo para salvar os resultados
 
-  //encontrar d0 em função de a
-  d_tot=0.0;
-  d0=0.0;
-  for(i=0; i<L; i++){
-    for (j=0;j<L;j++){
-      if (i!=j){
-        d_tot+=0.01/pow(abs(i-L/2)+abs(j-L/2),1);
-        d0+=1.0/pow(abs(i-L/2)+abs(j-L/2),a);
-      }
+
+  arq = fopen ("dadosMunicipioMG.dat", "r");
+
+  int id, idibge, populacaoTotal;
+  maiorPopulacao=0;
+  while (fscanf(arq,"%d %d %d", &id, &idibge, &populacaoTotal)!=EOF ){
+
+    populacaoCidade[id][0]=idibge;
+    populacaoCidade[id][1]=populacaoTotal;
+    populacaoTotalCidades+=populacaoTotal;
+    if (populacaoCidade[maiorPopulacao][1]<populacaoCidade[id][1]){
+      maiorPopulacao=id;
+    }
+
+  }
+  fclose(arq);
+  arq = fopen ("difusaoMunicipiosMG.dat", "r");
+  double taxaDifusao;
+  int cidade1, cidade2;
+  memset(d, 0, POPULACOES*POPULACOES*sizeof(d[0][0]));
+  while (fscanf(arq, "%d %d %lf", &cidade1, &cidade2, &taxaDifusao)!=EOF){
+    if (cidade1!=cidade2){
+
+      for (i=0; populacaoCidade[i][0]!=cidade1; i++);
+
+
+      for (j=0; populacaoCidade[j][0]!=cidade2; j++);
+
+      d[i][j]=taxaDifusao/(1.0*populacaoCidade[i][1]);
     }
   }
-  d0=d_tot/d0;
-
-  //fim
 
 
   memset(dados,0,(3)*(QUANT_DADOS)*sizeof(dados[0][0]));
-  sprintf (nome, "mediaCidades-%lf-tempo%d-TESTE.dat", a, (int)TEMPO_MAXIMO);
+  sprintf (nome, "mediaCidades-tempo%d-TESTE.dat", (int)TEMPO_MAXIMO);
   arq = fopen (nome, "w");
 
-  sprintf (nome, "pico-epidemia-%lf-tempo%d.dat", a, (int)TEMPO_MAXIMO);
+  sprintf (nome, "pico-epidemia-tempo%d-1dat.dat", (int)TEMPO_MAXIMO);
   arq2 = fopen (nome, "w");
   printf("Nome: %s\n", nome);
   u=0;
 
-  memset(dados,0,(2*L*L+1)*(QUANT_DADOS)*sizeof(dados[0][0]));
-  memset(picoEpidemia,0,(2)*(L*L)*sizeof(picoEpidemia[0][0]));
+  memset(dados,0,(2*POPULACOES+1)*(QUANT_DADOS)*sizeof(dados[0][0]));
+  memset(picoEpidemia,0,(2)*(POPULACOES)*sizeof(dados[0][0]));
   memset(media, 0, QUANT_DADOS*sizeof(media[0]));
+  memset(mediaRecuperados, 0, POPULACOES*sizeof(mediaRecuperados[0]));
+  sprintf (nome, "NumeroRecuperados-%d.dat", (int)TEMPO_MAXIMO);
+  arq6 = fopen (nome, "w");
   while (u<QUANT_AMOSTRAS){
-    memset(auxPicoEpidemia,0,2*(L*L)*sizeof(auxPicoEpidemia[0][0]));
+    memset(auxPicoEpidemia,0,2*(POPULACOES)*sizeof(auxPicoEpidemia[0][0]));
     inicializacao();
     t=0.0;
     n=0;
@@ -441,43 +468,43 @@ int main() {
     do{
       if (tempo>=t){
 
+
         if (u==0){
-          media[n]=1.0*NiTotalSoma/(1.0*N*L*L);
-          i=1;
-          for (j=0; j<L*L; j++, i+=2){
+          media[n]=1.0*NiTotalSoma/(1.0*populacaoTotalCidades);
+          for (i=1, j=0; i<(POPULACOES*2+1); i+=2, j++){
             dados[i][n]=(1.0*NiTotal[j])/(NiTotal[j]+NsTotal[j]+Nr[j]);
             dados[i+1][n]=1.0*Nr[j]/(1.0*(NiTotal[j]+NsTotal[j]+Nr[j]));
             if (auxPicoEpidemia[1][j]<(1.0*NiTotal[j])/(NiTotal[j]+NsTotal[j]+Nr[j])){
               auxPicoEpidemia[0][j]=tempo;
               auxPicoEpidemia[1][j]=(1.0*NiTotal[j])/(NiTotal[j]+NsTotal[j]+Nr[j]);
+
+
             }
           }
         }
         else{
-          media[n]+=1.0*NiTotalSoma/(1.0*N*L*L);
-          i=1;
-          for (j=0; j<L*L; j++, i+=2){
+          media[n]+=1.0*NiTotalSoma/(1.0*populacaoTotalCidades);
+          for (i=1, j=0; i<(POPULACOES*2+1); i+=2, j++){
             dados[i][n]+=(1.0*NiTotal[j])/(NiTotal[j]+NsTotal[j]+Nr[j]);
             dados[i+1][n]+=1.0*Nr[j]/(1.0*(NiTotal[j]+NsTotal[j]+Nr[j]));
             if (auxPicoEpidemia[1][j]<(1.0*NiTotal[j])/(NiTotal[j]+NsTotal[j]+Nr[j])){
               auxPicoEpidemia[0][j]=tempo;
               auxPicoEpidemia[1][j]=(1.0*NiTotal[j])/(NiTotal[j]+NsTotal[j]+Nr[j]);
+
             }
           }
         }
-        t+=p;
+        t+=dt;
         n++;
 
       }
       if (tempoViagem<=(tempo-1) && auxViagem==1){
         tempoViagem++;
-        //printf("viagem\n");
         viajar();
         //printf("Viajar: %lf\n", tempo);
         auxViagem=0;
       }
       if (tempoViagem<=(tempo-0.5) && auxViagem==0){
-        //printf("retorno\n");
         retornar();
         //printf("Retornar: %lf\n", tempo);
         auxViagem=1;
@@ -494,9 +521,10 @@ int main() {
       //printf("%d %d\n", NiTotalSoma, NsTotalSoma);
     } while (tempo<TEMPO_MAXIMO && NiTotalSoma>0);
 
-    for (i=0; i<L*L; i++){
+    for (i=0; i<POPULACOES; i++){
       picoEpidemia[0][i]+=auxPicoEpidemia[0][i];
       picoEpidemia[1][i]+=auxPicoEpidemia[1][i];
+      mediaRecuperados[i]+=Nr[i];
     }
   //  getchar();
     u++;
@@ -507,10 +535,10 @@ int main() {
   double auxiliar[2][QUANT_DADOS];
 
 
-  sprintf (nome, "infectados-%lf-cidades-tempo%d.dat", a, (int)TEMPO_MAXIMO);
+  sprintf (nome, "infectados-cidades-tempo%d.dat", (int)TEMPO_MAXIMO);
   arq3 = fopen (nome, "w");
 
-  sprintf (nome, "larguraCurva-%lf-cidades-tempo%d.dat", a, (int)TEMPO_MAXIMO);
+  sprintf (nome, "larguraCurva-cidades-tempo%d.dat", (int)TEMPO_MAXIMO);
   arq4 = fopen (nome, "w");
   n=0;
   for (i=0;t<TEMPO_MAXIMO;i++){
@@ -521,7 +549,7 @@ int main() {
     auxiliar[0][i]=0;
     auxiliar[1][i]=0;
     fprintf(arq3, "%lf ", dados[0][i]);
-    for (j=1; j<(L*L*2+1); j+=2){
+    for (j=1; j<(POPULACOES*2+1); j+=2){
       dados[j][i]/=QUANT_AMOSTRAS;
       dados[j+1][i]/=QUANT_AMOSTRAS;
       fprintf(arq3, "%lf %lf ", dados[j][i], dados[j+1][i]);
@@ -529,27 +557,31 @@ int main() {
       auxiliar[1][i]+=dados[j+1][i];
     }
     fprintf (arq3, "\n");
-    t+=p;
+    t+=dt;
     n=i;
-  //  printf("%d\n", i);
+    printf("%d\n", i);
   }
 
   largura_da_curva();
 
+  sprintf (nome, "lista-tempo%d.dat", (int)TEMPO_MAXIMO);
+  arq5 = fopen (nome, "w");
 
 
-  for (i=0; i<L*L; i++){
+  for (i=0; i<POPULACOES; i++){
     picoEpidemia[0][i]/=QUANT_AMOSTRAS;
-    //  printf("%lf\n", picoEpidemia[1][i]);
+  //  printf("%lf\n", picoEpidemia[1][i]);
     picoEpidemia[1][i]/=QUANT_AMOSTRAS;
-    //  printf("%lf\n", picoEpidemia[1][i]);
+  //  printf("%lf\n", picoEpidemia[1][i]);
     //getchar();
-    fprintf(arq2, "%d %lf %lf\n", distFocoIni[i], picoEpidemia[0][i], picoEpidemia[1][i]);
-    fprintf(arq4, "%d %lf\n", distFocoIni[i], larguraCurva[i]);
+    fprintf(arq6, "%d %lf \n ", i, 1.0*mediaRecuperados[i]/1.0*QUANT_AMOSTRAS);
+    fprintf(arq2, "%d %lf %lf\n", i, picoEpidemia[0][i], picoEpidemia[1][i]);
+    fprintf(arq4, "%d %lf\n", i, larguraCurva[i]);
+    fprintf(arq5, "%d %d %d\n", i, lista[0][i], lista[1][i]);
   }
 
   for (i=0; i<=(n); i++){
-    fprintf(arq, "%lf %lf %lf %lf", dados[0][i], auxiliar[0][i]/(1.0*L), media[i]/(1.0*QUANT_AMOSTRAS), auxiliar[1][i]/(1.0*L));
+    fprintf(arq, "%lf %lf %lf %lf", dados[0][i], auxiliar[0][i]/(1.0*POPULACOES), media[i]/(1.0*QUANT_AMOSTRAS), auxiliar[1][i]/(1.0*POPULACOES));
     fprintf(arq, "\n");
   }
 

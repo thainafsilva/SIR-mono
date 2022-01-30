@@ -10,7 +10,7 @@
 
 int u;
 double dados[2*POPULACOES+1][QUANT_DADOS], media[QUANT_DADOS];
-double lambda, mi;
+double lambda, mu;
 double k[POPULACOES];
 double tempo=0.0;
 double taxaInfeccao[POPULACOES], taxaCura[POPULACOES];
@@ -51,7 +51,7 @@ void inicializacao(){
   i=0;
   tempo=0.0;
   lambda=0.06;
-  mi=0.25;
+  mu=0.25;
   f=0.0; //fator que reduz o número de contatos diários
 
 
@@ -101,7 +101,7 @@ void inicializacao(){
     NiTotalSoma+=NiTotal[i];
     NsTotalSoma+=NsTotal[i];
     taxaInfeccao[i]=lambda*k[i]*NiTotal[i]*NsTotal[i]/(NiTotal[i]+NsTotal[i]+Nr[i]);
-    taxaCura[i]=mi*NiTotal[i];
+    taxaCura[i]=mu*NiTotal[i];
     taxaCuraTotal+=taxaCura[i];
     taxaInfeccaoTotal+=taxaInfeccao[i];
   }
@@ -121,7 +121,7 @@ void curar(){
     aux+=taxaCura[i];
     if (zr<aux){
       aux-=taxaCura[i];
-      aux+= Ni[i][i]*mi;
+      aux+= Ni[i][i]*mu;
       if (zr<aux){
         Ni[i][i]--;
         Nr[i]++;
@@ -132,7 +132,7 @@ void curar(){
       else{
         for(j=0; j<POPULACOES;j++){
           if (i!=j){
-            aux+=Ni[i][j]*mi;
+            aux+=Ni[i][j]*mu;
           }
           if (zr<aux){
             Ni[i][j]--;
@@ -165,7 +165,7 @@ void curar(){
 
 
   taxaInfeccao[cidade1]=lambda*k[cidade1]*NiTotal[cidade1]*NsTotal[cidade1]/(NiTotal[cidade1]+NsTotal[cidade1]+Nr[cidade1]);
-  taxaCura[cidade1]=mi*NiTotal[cidade1];
+  taxaCura[cidade1]=mu*NiTotal[cidade1];
 
 
   taxaInfeccaoTotal+=taxaInfeccao[cidade1];
@@ -240,7 +240,7 @@ void infectar(){
   taxaCuraTotal-=taxaCura[cidade1];
 
   taxaInfeccao[cidade1]=lambda*k[cidade1]*NiTotal[cidade1]*NsTotal[cidade1]/(NiTotal[cidade1]+NsTotal[cidade1]+Nr[cidade1]);
-  taxaCura[cidade1]=mi*NiTotal[cidade1];
+  taxaCura[cidade1]=mu*NiTotal[cidade1];
 
   taxaInfeccaoTotal+=taxaInfeccao[cidade1];
   taxaCuraTotal+=taxaCura[cidade1];
@@ -301,7 +301,7 @@ void viajar(){
     NsTotalSoma+=NsTotal[i];
 
     taxaInfeccao[i]=lambda*k[i]*NiTotal[i]*NsTotal[i]/(NiTotal[i]+NsTotal[i]+Nr[i]);
-    taxaCura[i]=mi*NiTotal[i];
+    taxaCura[i]=mu*NiTotal[i];
     taxaCuraTotal+=taxaCura[i];
     taxaInfeccaoTotal+=taxaInfeccao[i];
     //printf("%d: V %lf I %lf C %lf \n\n", i, taxaViagem[i], taxaInfeccao[i], taxaCura[i]);
@@ -339,7 +339,7 @@ void retornar(){
     NsTotalSoma+=NsTotal[i];
 
     taxaInfeccao[i]=lambda*k[i]*NiTotal[i]*NsTotal[i]/(NiTotal[i]+NsTotal[i]+Nr[i]);
-    taxaCura[i]=mi*NiTotal[i];
+    taxaCura[i]=mu*NiTotal[i];
     taxaCuraTotal+=taxaCura[i];
     taxaInfeccaoTotal+=taxaInfeccao[i];
     //printf("%d: V %lf I %lf C %lf \n\n", i, taxaViagem[i], taxaInfeccao[i], taxaCura[i]);
@@ -441,7 +441,7 @@ int main() {
   inicializacao();
 
   memset(dados,0,(3)*(QUANT_DADOS)*sizeof(dados[0][0]));
-  sprintf (nome, "mediaCidades-%d-tempo%d-TESTE.dat", POPULACOES, (int)TEMPO_MAXIMO);
+  sprintf (nome, "mediaCidades-%d-tempo%d.dat", POPULACOES, (int)TEMPO_MAXIMO);
   arq = fopen (nome, "w");
 
   sprintf (nome, "pico-epidemia-%d-tempo%d.dat", POPULACOES, (int)TEMPO_MAXIMO);
